@@ -1,0 +1,1015 @@
+
+%Comenzar el documento aqui.
+\begin{document}
+    \maketitle
+    \tableofcontents
+    \newpage
+
+
+
+
+\section{Lugar de realización de PPS}
+
+La Práctica Profesional Supervisada se desarrolló en el Grupo de Investigación y Transferencia en Electrónica Avanzada (G.In.T.E.A) de la UTN, Facultad Regional Córdoba.
+Este grupo, formalizado en 2016, es la continuación de un trabajo iniciado en 1985 y cuenta con una sólida trayectoria en investigación en áreas como procesamiento de señales, equipamiento médico, ingeniería en rehabilitación, energías alternativas y comunicaciones.
+\section{Proyecto de Laboratorio remoto}
+
+\subsection*{Introducción }
+
+
+
+Este proyecto presenta la implementación de un laboratorio remoto diseñado para la enseñanza y experimentación de técnicas de modulación en radiofrecuencia (RF). La arquitectura del sistema se centra en un microcontrolador ESP32, que actúa como unidad central de control para gestionar de manera precisa osciladores y módulos de modulación a través del protocolo de comunicación I2C .  
+
+El sistema integra conmutadores de RF (RF switches), controlados por el ESP32, que determinan los valores de \(N\) y \(M\) y habilitan una matriz de conmutación flexible. Esta configuración permite interconectar múltiples fuentes de señal (N osciladores y M mezcladores), de modo que cada oscilador pueda combinarse con cualquiera de los mezcladores y un mezclador con cualquiera de los osciladores . La arquitectura resultante ofrece gran versatilidad para configurar diferentes escenarios de prueba
+
+
+El objetivo principal de esta plataforma es proporcionar a los estudiantes una herramienta didáctica que les permita visualizar y comparar esquemas de modulación y sus parámetros fundamentales. Al eliminar la necesidad de construir y depurar circuitos físicos, los usuarios pueden concentrar sus esfuerzos en la comprensión teórica y el análisis práctico de las señales. La configuración de los experimentos y el ajuste de parámetros se realizan de forma intuitiva y remota a través de una interfaz web  
+
+Para completar la experiencia de aprendizaje, el laboratorio incorpora un osciloscopio, un analizador de espectro y otros instrumentos, todos accesibles, visibles y controlables en línea, lo que permite una caracterización detallada de las señales generadas. Esta integración convierte a la plataforma en un recurso educativo de alto valor, al combinar la flexibilidad de la reconfiguración por software, la accesibilidad remota y la posibilidad de experimentar con señales de RF reales en un entorno controlado, permitiendo así el estudio de forma remota.
+
+\section{Contribuciones en el proyecto}
+
+
+\subsection*{Investigación y análisis de Switch RF}
+
+Como primera tarea, se realizó un estudio de los Switch RF disponibles, evaluando su compatibilidad con los requerimientos del proyecto, así como factores adicionales como costos y tiempos de entrega. Este análisis permitió seleccionar los dispositivos más adecuados para integrarlos en el laboratorio remoto y asegurar su correcto funcionamiento dentro de la arquitectura establecida.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Swich.png}
+    \caption{Modulos disponibles para conseguir en Argentina}
+\end{figure}
+
+\subsection*{Interfaz gráfica}
+
+Como primera instancia, se intentó que la página web se ejecutara directamente desde el ESP32. Sin embargo, debido a las limitaciones de recursos del microcontrolador, se decidió implementar la interfaz a través de un servidor local.  
+
+La estructura del proyecto web se organizó de la siguiente manera:
+
+\begin{itemize}
+    \item \texttt{index.html}: Contenedor principal que enlaza los archivos \texttt{style.css} y \texttt{script.js}.
+    \item \texttt{style.css}: Define el estilo de la página, incluyendo columnas, colores, botones y diseño responsivo.
+    \item \texttt{script.js}:
+    \begin{itemize}
+        \item \texttt{modulesData}: Array que contiene la definición de los módulos y sus controles. Simplemete agregando mas definiciones de modulos y sus controles , se actualizara la interfaz grafica
+        \item \texttt{renderModules()}: Función que construye dinámicamente la interfaz HTML a partir de los datos de los módulos.
+        \item Lógica de \texttt{WebSocket}: Funciones \texttt{enviarComando()} y \texttt{procesarRespuesta()} encargadas de la comunicación con el ESP32 y el procesamiento de los datos recibidos.
+    \end{itemize}
+\end{itemize}
+\subsection*{Componentes y Funcionalidades de la Interfaz Web de Control}
+La figura \ref{fig:interfaz_grafica} ilustra la Interfaz Gráfica de Usuario (GUI) desarrollada para la gestión del instrumento virtual. Esta herramienta web centraliza el control y la monitorización de los módulos de hardware conectados al ESP32 a través del bus I2C. Su diseño está organizado en secciones funcionales para facilitar una operación intuitiva y eficiente, las cuales se describen a continuación.
+
+\subsubsection*{Panel de Conexión del Dispositivo}
+
+Esta sección es el punto de partida para establecer la comunicación con el microcontrolador. Contiene los siguientes elementos:
+
+\begin{itemize}
+    \item \textbf{Campo de Dirección IP:} Un campo de texto para la introducción de la dirección IP asignada al ESP32 en la red local.
+    \item \textbf{Botón de Conexión:} Al presionarlo, se inicia el intento de enlace con el dispositivo.
+    \item \textbf{Indicador de Estado:} Un mensaje de texto que informa en tiempo real el estado de la comunicación, mostrando ``Desconectado'' (resaltado visualmente para mayor claridad) o ``Conectado''.
+\end{itemize}
+\subsubsection*{Grupo de Generadores de señales}
+
+Esta área permite la configuración de módulos más complejos, como el generador de frecuencia Si5351. Ofrece controles interactivos para cada tipo de módulos. 
+
+
+
+\subsubsection*{Grupo de Control de Osciladores Locales}
+
+Dedicado a la elección con los módulos osciladores. Simplemente es elegir el oscilador a trabajar y presionar el boton 'Seleccionar este Oscilador'para confimar y asi el swich de rf para osciladores selecciona habilita el mismo
+
+
+
+
+\subsubsection*{Herramientas de Diagnóstico}
+
+Para facilitar la depuración y la verificación del sistema, la interfaz incluye:
+
+\begin{itemize}
+    \item \textbf{Escáner del Bus I2C:} Un botón que, al ser presionado, inicia un barrido completo del bus I2C para detectar todos los dispositivos activos. Los resultados, consistentes en una lista de las direcciones I2C encontradas, se muestran en un área de texto designada.
+\end{itemize}
+
+\subsubsection*{Consola de Registros del ESP32 (Log)}
+
+Actúa como una ventana de depuración central. Se trata de una caja de texto que muestra un historial cronológico de todas las respuestas y mensajes enviados por el ESP32. Esta función proporciona una trazabilidad completa de las operaciones realizadas, facilitando la supervisión y la identificación de errores.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{imagenes/interfaz.png}
+    \caption{Interfaz Gráfica de Usuario (GUI) para el control del laboratorio remoto.}
+    \label{fig:interfaz_grafica}
+\end{figure}
+
+
+
+\newpage
+\subsection*{Programación de  ESP32}
+
+Para verificar la comunicación entre módulos ESP32 se implementó un firmware basado en \textbf{WebSockets} y operaciones \textbf{I2C}, permitiendo la interacción remota y control de periféricos conectados. Las principales funcionalidades del firmware incluyen:
+
+
+    \subsubsection*{Conexión a red WiFi o creación de AP:}  
+   Al iniciarse, el microcontrolador ESP32 ejecuta una rutina de gestión de conectividad. Inicialmente, intenta establecer una conexión con una red WiFi previamente configurada, utilizando las credenciales (SSID y contraseña) almacenadas de forma persistente en la memoria EEPROM.
+
+Si la conexión es exitosa, el dispositivo entra en su modo de operación normal. La pantalla OLED muestra un mensaje de confirmación, el nombre del laboratorio y la dirección IP asignada por la red local, como se observa en la Figura \ref{fig:wifi_conectado}.
+
+En caso de que no sea posible conectarse —ya sea por credenciales incorrectas o por la ausencia de la red— el sistema activa un modo de contingencia. En este estado, el ESP32 crea su propio punto de acceso (\textbf{Access Point}) con el SSID \texttt{ESP32\_Config} (Figura \ref{fig:modo_ap}). Esto permite al usuario conectarse directamente al dispositivo para acceder a un portal web de configuración (Figura \ref{fig:portal_web}), donde puede introducir las credenciales de la red WiFi deseada para su posterior almacenamiento y reinicio del dispositivo.
+
+\begin{figure}[h!]
+    \centering
+    % Primera fila con las pantallas OLED
+    \begin{subfigure}[b]{0.3\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{1.jpg}
+        \caption{ESP32 operando en modo Access Point (AP) para configuración inicial.}
+        \label{fig:modo_ap}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.3\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{2.jpg}
+        \caption{Dispositivo conectado exitosamente a la red WiFi local.}
+        \label{fig:wifi_conectado}
+    \end{subfigure}
+    
+    \vspace{5mm} % Espacio vertical entre filas de subfiguras
+    
+    % Segunda fila con el portal web
+    \begin{subfigure}[b]{0.3\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{wifies32.png}
+        \caption{Página web cautiva para la configuración de la red.}
+        \label{fig:portal_web}
+    \end{subfigure}
+
+    \caption{Estados de conexión del ESP32 y su portal de configuración web.}
+    \label{fig:proceso_conexion_wifi}
+\end{figure}
+
+\begin{itemize}
+
+       \item \textbf{Gestión de la interfaz OLED:}  
+    La pantalla OLED muestra:
+    \begin{itemize}
+        \item Estado general del laboratorio remoto, incluyendo cantidad de módulos I2C detectados.
+        \item Icono de conexión WebSocket indicando si existen clientes conectados.
+        \item IP asignada al ESP32.
+        \item Mensajes temporales durante la ejecución de comandos, proporcionando retroalimentación inmediata.
+        \item Observar actualizaciones de estado en la pantalla OLED
+    \end{itemize}
+    
+    \item \textbf{Lógica de pruebas y comunicación I2C:}  
+    Cada comando recibido a través del WebSocket se procesa y traduce a operaciones I2C si corresponde, devolviendo un JSON de respuesta que indica éxito o error.
+    
+    \item \textbf{Flujo de prueba típico:}
+    \begin{enumerate}
+        \item Conectar ESP32 a WiFi o AP.
+        \item Escanear dispositivos I2C con \texttt{escanear\_i2c} y verificar respuesta.
+        \item Configurarlos modulos  y verificar salida mediante el display o medición externa.
+        \item Enviar comandos de prueba al OLED o realizar transacciones I2C específicas para validar comunicación.
+        \item Observar actualizaciones de estado en la pantalla OLED y en la consola serial para confirmar la correcta ejecución de los comandos.
+    \end{enumerate}
+\end{itemize}
+\subsection{Esquemático de conexión }
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{imagenes/Esquematico.png}
+    \caption{Esquematico de ESP32}
+    \label{fig:squematico de ESP32}
+\end{figure}
+\section{Optimización de la Arquitectura del Firmware y Modularización del Código}
+
+Se llevó a cabo una reestructuración integral del código fuente del proyecto. El objetivo principal fue migrar de un archivo monolítico (`main.ino`) a una arquitectura modular, mejorando significativamente la legibilidad, mantenibilidad y escalabilidad del firmware.
+
+Lo que llevo a un cambio general de todos los archivos existentes. Tanto de ESP32 y interfaz web
+
+\subsection{Abstracción de Módulos Funcionales}
+El proceso consistió en identificar y extraer responsabilidades lógicas clave en módulos independientes, cada uno compuesto por un archivo de cabecera (`.h`) y uno de implementación (`.cpp`).
+
+\subsubsection{Módulo 1: Portal de Configuración WiFi (`portal\_config`)}
+\begin{itemize}
+    \item \textbf{Estado Inicial:} La lógica para iniciar el modo Punto de Acceso (AP), servir la página de configuración y guardar las credenciales WiFi se encontraba mezclada en el archivo principal.
+    \item \textbf{Acción Realizada:} Se crearon los archivos \texttt{portal\_config.h} y \texttt{portal\_config.cpp} para encapsular toda esta funcionalidad. El archivo principal ahora solo necesita incluir la cabecera y llamar a la función \texttt{startAP()}.
+    \item \textbf{Beneficio:} Se facilita la reutilización de este portal en otros proyectos y se aísla la lógica de configuración de la lógica principal del instrumento.
+\end{itemize}
+
+\subsubsection{Módulo 2: Manejador de Pantalla OLED (\texttt{display\_handler})}\label{Pantalla}
+
+\begin{itemize}
+    \item \textbf{Estado Inicial:} Todas las funciones responsables de dibujar en la pantalla OLED (pantalla principal, mensajes de estado, etc.) estaban dispersas en el archivo principal, mezclando lógica de control con lógica de presentación.
+    \item \textbf{Acción Realizada:} Se encapsuló toda la gestión visual en \texttt{display\_handler} y se implementó una estructura de datos global unificada (\texttt{currentDisplayState}). Esta estructura funciona como una ``plantilla universal`` con cuatro campos de texto: Nombre del Módulo (título), Dato Principal (visualización destacada) y dos campos para Detalles Secundarios.
+    \item \textbf{Mecanismo de Integración:} Para que cualquier módulo (actual o futuro) muestre su información, solo debe rellenar estos cuatro campos con sus propios valores antes de llamar a la función de refresco de pantalla.
+    \item \textbf{Beneficio:} Se desacopla completamente la interfaz gráfica del hardware. Integrar visualmente un nuevo instrumento es trivial, ya que no requiere modificar el código de la pantalla, solo ``llenar la plantilla`` con los datos correspondientes.
+    \item \textbf{Ejemplo:}
+    \begin{lstlisting}[style=arduinoStyle, caption={Estructura de como utilizar la funcion currentDisplayState}]
+        void updateDisplayVfoState() {
+            currentDisplayState.moduleName = "Si5351  (" + String(vfo_is_tx ? "TX" : "RX") + ")";
+            
+            double freqMHz = vfo_freq / 1000000.0;
+            currentDisplayState.primaryDisplay = String(freqMHz, 3) + " MHz";
+        
+            String stepStr;
+            if(vfo_fstep < 1000) stepStr = String(vfo_fstep) + "Hz";
+            else stepStr = String(vfo_fstep / 1000) + "kHz";
+            currentDisplayState.secondaryDisplay = "Banda: " + vfo_band_name;
+            
+            currentDisplayState.tertiaryDisplay = "Paso: " + stepStr;
+        }
+        
+    \end{lstlisting}
+
+
+
+\begin{figure}
+   
+\begin{tcolorbox}[
+  enhanced,
+  colback=black!2,
+  colframe=black,
+  width=0.5\textwidth,
+  sharp corners,
+  boxrule=0.8pt,
+  remember as=mybox,    % <-- guarda la posición del cuadro como nodo llamado 'mybox'
+  overlay={
+    % Este overlay dibuja un nodo de referencia al borde derecho de la caja
+    \node[anchor=east, inner sep=0pt] (myboxeast) at (frame.east) {};
+  }
+]
+  % Línea 1
+  \textbf{Si5351 (RX)} \hfill \Large{\textbullet} \\[4pt]
+  % Línea divisoria
+  \hrule
+  \vspace{12pt}
+  % Línea 2
+  \centerline{\Huge \textbf{7.150 MHz}}
+  \vspace{12pt}
+  % Línea 3
+  \textbf{Banda:} 40m \hfill \textbf{Paso:} 1kHz
+  \vspace{10pt}
+  % Línea 4
+  \tcblower
+ 
+  \texttt{192.168.1.100}
+\end{tcolorbox}
+
+% --- DIBUJO DE LAS ANOTACIONES CON FLECHAS ---
+\begin{tikzpicture}[remember picture, overlay]
+  % Definimos estilos
+  \tikzset{
+    arrow_style/.style={-Latex, gray, thick},
+    label_style/.style={font=\small, text=black, anchor=west}
+  }
+
+  % Coordenadas en el borde derecho del tcolorbox
+  \coordinate (L1) at ([yshift=2.5cm]myboxeast);
+  \coordinate (L2) at ([yshift=1.8cm]myboxeast);
+  \coordinate (L3) at ([yshift=0.2cm]myboxeast);
+  \coordinate (L4) at ([yshift=-0.4cm]myboxeast);
+  \coordinate (L5) at ([yshift=-2.3cm]myboxeast);
+
+  % Flechas con etiquetas
+  \draw[arrow_style] ([xshift=2mm]L1) -- ++(1.5,0) node[right, label_style] {Línea 1:  moduleName + icono WebSocket};
+ 
+  \draw[arrow_style] ([xshift=2mm]L3) -- ++(1.5,0) node[right, label_style] {Línea 2:primaryDisplay (texto grande)};
+  \draw[arrow_style] ([xshift=2mm]L4) -- ++(1.5,0) node[right, label_style] {Línea 3: secondaryDisplay; tertiaryDisplay};
+  \draw[arrow_style] ([xshift=2mm]L5) -- ++(1.5,0) node[right, label_style] {Línea 4: Dirección IP};
+
+\end{tikzpicture}
+  \caption{Distribucion de currentDisplayState.xxxxxx}
+\end{figure}
+
+\end{itemize}
+
+\subsection{Modularización y Depuración del Escáner I2C}
+Siguiendo la misma filosofía, se procedió a modularizar la función de escaneo de dispositivos I2C.
+\begin{itemize}
+    \item \textbf{Acción Realizada:} Se creó el módulo \texttt{i2c\_scanner} (\texttt{.h} y \texttt{.cpp}) para encapsular la lógica de escaneo y la generación de la respuesta WebSocket.
+    \item \textbf{Problema en Tiempo de Ejecución:} Tras la refactorización, se detectó que la funcionalidad de escaneo había dejado de operar. Aunque el código compilaba correctamente, la acción no se ejecutaba al ser invocada desde el cliente web.
+    \item \textbf{Proceso de Depuración:} Se implementó un diagnóstico estratégico mediante trazas en el monitor serie (\texttt{Serial.println()}). Este proceso reveló que el flujo de control dentro de la función principal de eventos WebSocket (\texttt{webSocketEvent}) era incorrecto. El bloque que gestionaba la acción de escaneo no terminaba su ejecución con una instrucción \texttt{return}, lo que provocaba que el flujo continuara y generara un comportamiento anómalo.
+
+
+    \item \textbf{Corrección Final:} Se reestructuró la lógica condicional (`if/else if`) en \texttt{webSocketEvent} para asegurar que cada bloque de manejo de acción fuera autónomo, enviara su propia respuesta y finalizara su ejecución explícitamente. Con esta corrección, la funcionalidad del escáner I2C fue completamente restaurada.
+\end{itemize}
+
+
+
+
+
+\section{Aplicación de la Arquitectura: Integración de Generadores de Señal}
+
+Una vez establecida una base de firmware modular, el siguiente paso fue aplicar este modelo para integrar la funcionalidad principal del instrumento: los generadores de señal. La arquitectura demostró su eficacia al permitir la incorporación paralela y desacoplada de tres módulos de hardware distintos (Si5351, AD9850 y ADF4351), cada uno con sus propios protocolos de comunicación y particularidades técnicas.
+
+\subsection{El Patrón de Diseño \textit{Handler} como Unidad Funcional}
+
+Cada generador de señal fue implementado siguiendo un patrón de diseño definido como \textit{Handler}. Un handler es una unidad de software autónoma, encapsulada en un par de archivos \texttt{.h/.cpp}, que actúa como el único intermediario entre el firmware principal y un componente de hardware específico.
+
+\subsubsection{Interfaz Pública y Contrato de Funciones}
+
+La clave del patrón \textit{Handler} es su interfaz pública, definida en el archivo de cabecera. Dicha interfaz funciona como un “contrato” que establece de forma explícita cómo debe interactuar el resto del sistema con el módulo, sin requerir conocimiento de los detalles internos de su implementación.  
+
+Por ejemplo, la interfaz para el módulo AD9850 se define del siguiente modo:
+
+\begin{lstlisting}[style=arduinoStyle, caption={Interfaz publica estandarizada para el handler del AD9850.}]
+// ad9850_handler.h
+
+// Inicializa los pines GPIO y resetea el modulo.
+
+void ad9850_setup();
+
+// Punto de entrada para todos los comandos WebSocket dirigidos al AD9850.
+void handle_ad9850_command(uint8_t clientNum, StaticJsonDocument<512>& doc);
+\end{lstlisting}
+
+Esta estructura se replica para cada módulo, garantizando uniformidad y previsibilidad en todo el proyecto.
+
+\subsubsection{Encapsulación de la Complejidad}
+
+Toda la lógica de bajo nivel se encapsula completamente dentro del archivo de implementación \texttt{.cpp} del handler:
+
+\begin{itemize}
+    \item \textbf{Si5351:} El handler gestiona la comunicación I2C, el cálculo de los registros PLL y MultiSynth, y el control de los canales de salida.
+    \item \textbf{AD9850:} Implementa comunicación serie mediante \textit{bit-banging} por GPIO, manejando manualmente los pulsos de reloj (W\_CLK) y de actualización (FQ\_UD).
+    \item \textbf{ADF4351:} Configura y gestiona el bus SPI, calcula los seis registros de 32 bits requeridos por el PLL y controla el pin de selección de chip.
+\end{itemize}
+
+Esta encapsulación es esencial: el firmware principal no necesita conocer si un módulo utiliza I2C, SPI o GPIO. Su interacción se limita a invocar la función \texttt{handle\_<modulo>\_command()} correspondiente.
+
+\subsection{El Despachador de Comandos y el Protocolo de Comunicación}
+
+La modularización del hardware se complementa con una modularización a nivel de protocolo de comunicación. La función \texttt{webSocketEvent}, previamente depurada, asume ahora el rol de despachador o enrutador de comandos.
+
+El protocolo JSON fue diseñado para simplificar este enrutamiento. Cada mensaje enviado desde la interfaz web incluye una clave \texttt{"accion"}, cuyo valor determina qué handler debe procesar la solicitud:
+
+\begin{lstlisting}[style=arduinoStyle, caption={Estructura del despachador de comandos en \texttt{main.cpp}.}]
+// Fragmento de la funcion webSocketEvent()
+
+const char* accion = doc["accion"];
+
+if (strcmp(accion, "vfo_command") == 0) {
+    handleVfoCommand(num, doc); // Si5351
+} 
+else if (strcmp(accion, "ad9850_command") == 0) {
+    handle_ad9850_command(num, doc);
+}
+else if (strcmp(accion, "adf4351_command") == 0) {
+    handle_adf4351_command(num, doc);
+}
+// Para agregar un nuevo instrumento, solo se requiere
+// un nuevo bloque "else if" aqui.
+\end{lstlisting}
+
+Este diseño constituye la base de la escalabilidad del sistema. Para integrar un nuevo generador de señal o incluso un instrumento diferente (por ejemplo, un analizador de espectro), el procedimiento se limita a:
+\begin{enumerate}
+    \item Crear el nuevo handler siguiendo el patrón definido.
+    \item Añadir una cláusula \texttt{else if} correspondiente en el despachador.
+\end{enumerate}
+
+De esta manera, se cumple el principio de diseño “abierto para extensión, cerrado para modificación”, minimizando la posibilidad de errores o regresiones.
+
+\section{Implementación de los Switches RF}
+
+Otra etapa clave del proyecto fue la incorporación de los switches de RF, los cuales permiten seleccionar dinámicamente la salida del laboratorio en función del generador y oscilador activos.
+
+\subsection{Abstracción del Hardware de Conmutación: El \textit{RF Switch Handler}}
+
+Para mantener la independencia entre los módulos de generación y el hardware de conmutación, se aplicó el mismo principio de encapsulación.  
+
+\begin{itemize}
+    \item \textbf{Acción realizada:} Se desarrolló un handler dedicado, \texttt{rf\_switch\_handler}, cuya única función es traducir identificadores lógicos (por ejemplo, generador \texttt{0}, oscilador \texttt{1}) en las señales binarias correspondientes a los pines GPIO que controlan los multiplexores de RF.
+    \item \textbf{Beneficio arquitectónico:} Esta abstracción desacopla completamente la lógica de generación de señal de la de enrutamiento físico. Si en el futuro se reemplaza el switch RF por un modelo con interfaz I2C o SPI, solo sería necesario modificar el \texttt{rf\_switch\_handler}, sin afectar el resto del sistema.
+\end{itemize}
+
+\subsection{Evolución hacia el Patrón \textit{Despachador de Comandos}}
+
+La introducción del \texttt{rf\_switch\_handler} impulsó una mejora significativa en la arquitectura del firmware. En lugar de que cada handler de generador invoque directamente al handler del switch, esta lógica de coordinación se centralizó en la función \texttt{webSocketEvent} del archivo principal.
+
+Este modelo, conocido como \textit{Despachador de Comandos}, define roles claramente diferenciados:
+\begin{itemize}
+    \item \textbf{Especialistas:} Los handlers (\texttt{vfo\_handler}, \texttt{ad9850\_handler}, \texttt{rf\_switch\_handler}, etc.) son componentes especializados que ejecutan tareas específicas sin conocer la existencia de los demás.
+    \item \textbf{Orquestador:} La función \texttt{webSocketEvent} actúa como el coordinador central. Al recibir un comando, delega la acción al especialista correspondiente y ejecuta las operaciones previas necesarias. Por ejemplo, al recibir un comando para el AD9850, primero invoca al handler del switch para activar la ruta RF adecuada, y luego llama al handler del AD9850 para configurar la frecuencia solicitada.
+\end{itemize}
+
+\begin{lstlisting}[style=arduinoStyle, caption={Lógica del Despachador de Comandos centralizada en \texttt{main.cpp}.}]
+// Fragmento de la funcion webSocketEvent()
+// ...
+else if (strcmp(accion, "ad9850_command") == 0) {
+    // Paso 1: Orquestar el switch RF
+    select_generator(1); // ID del AD9850
+    
+    // Paso 2: Delegar al especialista del generador
+    handle_ad9850_command(num, doc);
+}
+else if (strcmp(accion, "select_oscillator") == 0) {
+    uint8_t osc_id = doc["id"];
+    select_oscillator(osc_id);
+}
+// ...
+\end{lstlisting}
+
+Este patrón refuerza la robustez y escalabilidad del sistema. Cada nuevo módulo se integra mediante una adición controlada al orquestador, manteniendo la coherencia general del firmware.
+
+\section{Arquitectura Extensible: Incorporación de Nuevos Módulos y Osciladores}
+
+Después de haber explicado como es la estructura de la logica del proyecto, se procede a explicar como se puede agregar nuevos módulos y osciladores:
+\subsection{Integración de un Nuevo Módulo en el Firmware}
+
+En el firmware, cada módulo de hardware es gestionado por un \textit{handler} específico. Este patrón de diseño encapsula la lógica de comunicación y control, garantizando el desacoplamiento y la independencia entre los distintos módulos.
+
+El proceso para añadir un nuevo módulo consta de los siguientes pasos fundamentales:
+
+\begin{enumerate}
+    \item \textbf{Creación del \textit{handler} del módulo.}
+    Se define un nuevo par de archivos, \texttt{<modulo>\_handler.h/.cpp}, que contiene la interfaz pública y la lógica de control específica del hardware.
+
+    
+\begin{lstlisting}[style=arduinoStyle,caption={Declaración de la interfaz del nuevo handler.}, label={lst:handler_h}]
+// nuevo_modulo_handler.h
+void nuevo_modulo_setup();
+void handle_nuevo_modulo_command(uint8_t clientNum, StaticJsonDocument<512>& doc);
+\end{lstlisting}
+
+    \item \textbf{Registro en el despachador de eventos.}
+    La función \texttt{webSocketEvent()} en \texttt{main.cpp} opera como un enrutador central de eventos. Para integrar el nuevo módulo, se añade una cláusula de enrutamiento \texttt{else if} que delega los comandos correspondientes a su \textit{handler}.
+    
+\begin{lstlisting}[style=arduinoStyle,caption={Registro del nuevo handler en el despachador central.}, label={lst:dispatcher_cpp}]
+else if (strcmp(accion, "nuevo_modulo_command") == 0) {
+    handle_nuevo_modulo_command(num, doc);
+}
+\end{lstlisting}
+
+    \item \textbf{Asignación de una ruta en el sistema de conmutación RF.}
+    Un requisito fundamental de la arquitectura es que cada fuente de señal disponga de una ruta de radiofrecuencia (RF) dedicada. El sistema emplea dos conmutadores RF independientes, ambos gestionados por el \texttt{rf\_switch\_handler}:
+    \begin{itemize}
+        \item Un conmutador para los \textbf{módulos generadores} (controlado por \texttt{select\_generator()}).
+        \item Un conmutador para los \textbf{osciladores locales} (controlado por \texttt{select\_oscillator()}).
+    \end{itemize}
+    Al añadir un nuevo generador, es indispensable asignarle un identificador único (de 0 a 7) para que la función \texttt{select\_generator()} pueda activar su canal físico correspondiente.
+
+    \item \textbf{Dentro de funcion setup()}
+\begin{lstlisting}[style=arduinoStyle,caption={Declaración de la funcion setup().}, label={lst:main.ino}]
+  vfo_setup();
+  delay(100);   
+  ad9850_setup(); 
+  delay(100);
+  adf4351_setup();
+  delay(100);
+  nuevo_modulo_setup () ; // <--- NUEVO
+  delay(100);
+  \end{lstlisting}
+\end{enumerate}
+
+
+\subsection{Extensión de la Interfaz Web para Nuevos Componentes}
+
+La interfaz web del instrumento replica la filosofía modular del firmware: cada generador de señal se representa como un bloque independiente en el documento HTML y es controlado por su propio conjunto de botones e identificadores.  
+Gracias a esta estructura, cada módulo mantiene su lógica aislada y puede ampliarse sin alterar la navegación general ni el sistema de comunicación.
+
+\subsubsection{Estructura Modular de los Generadores}
+
+En el archivo \texttt{index.html}, cada módulo de generación está definido dentro de la sección \texttt{\#generators-section} mediante un bloque con la clase \texttt{instrument-module}.  
+Por ejemplo, los tres generadores actuales se definen así:
+
+\begin{lstlisting}[style=arduinoStyle,language=html, caption={Estructura HTML modular de los generadores.}]
+<div class="instrument-module" data-name="VFO Si5351"> ... </div>
+<div class="instrument-module" data-name="Gen AD9850"> ... </div>
+<div class="instrument-module" data-name="Synth ADF4351"> ... </div>
+\end{lstlisting}
+
+Cada bloque contiene sus propios botones y controles (por ejemplo, para establecer frecuencia o habilitar salidas).  
+El código JavaScript asocia a cada botón un manejador de evento dedicado que envía un comando WebSocket con la acción correspondiente.
+
+\begin{lstlisting}[style=arduinoStyle,language=html, caption={Ejemplos de manejadores específicos por modulo.}]
+document.getElementById("vfoSetButton").addEventListener("click", () => {
+  const freq = parseInt(document.getElementById("vfoFreq").value);
+  enviarComando({
+    accion: "vfo_command",
+    sub_accion: "set_freq",
+    frecuencia_hz: freq
+  });
+});
+
+document.getElementById("ad9850SetButton").addEventListener("click", () => {
+  const freq = parseInt(document.getElementById("ad9850Freq").value);
+  enviarComando({
+    accion: "ad9850_command",
+    sub_accion: "set_freq",
+    frecuencia_hz: freq
+  });
+});
+
+document.getElementById("adf4351SetButton").addEventListener("click", () => {
+  const freq = parseInt(document.getElementById("adf4351Freq").value);
+  enviarComando({
+    accion: "adf4351_command",
+    sub_accion: "set_freq",
+    frecuencia_hz: freq
+  });
+});
+\end{lstlisting}
+
+Esta lógica independiente permite que cada módulo gestione su propio flujo de comandos sin interferir con los demás.  
+A nivel de interfaz, la navegación (botones “Anterior” y “Siguiente”) detecta automáticamente todos los elementos con la clase \texttt{instrument-module}, por lo que no es necesario modificar el código JavaScript al agregar nuevos módulos.
+
+\subsubsection{Adición de un Nuevo Módulo Generador}
+
+Para incorporar un cuarto generador o instrumento, el procedimiento es directo:
+
+\begin{enumerate}
+    \item \textbf{Duplicar un módulo existente en el HTML.}  
+    Copiar uno de los bloques \texttt{instrument-module} y modificar su nombre, los \texttt{id} de los controles y el atributo \texttt{data-name}:
+\begin{lstlisting}[style=arduinoStyle,language=html, caption={Ejemplo de un nuevo módulo agregado.}]
+<div class="instrument-module" data-name="DDS Secundario" style="display:none;">
+  <input type="number" id="dds2Freq" placeholder="Frecuencia en Hz">
+  <button id="dds2SetButton">Establecer</button>
+</div>
+\end{lstlisting}
+
+    \item \textbf{Agregar el manejador correspondiente en JavaScript.}  
+    
+    Siguiendo el mismo esquema que los modulos existentes:
+\begin{lstlisting}[style=arduinoStyle,language=html, caption={Manejador de evento para el nuevo modulo.}]
+document.getElementById("dds2SetButton").addEventListener("click", () => {
+  const freq = parseInt(document.getElementById("dds2Freq").value);
+  enviarComando({
+    accion: "dds2_command",
+    sub_accion: "set_freq",
+    frecuencia_hz: freq
+  });
+});
+\end{lstlisting}
+
+    \item \textbf{Integrar el comando en el firmware.}  
+    En el despachador principal del ESP32 (\texttt{webSocketEvent}), se añade una cláusula que redirija el nuevo comando a su \textit{handler} correspondiente:
+\begin{lstlisting}[style=arduinoStyle,language=c++, caption={Integración del nuevo módulo en el firmware.}]
+else if (strcmp(accion, "dds2_command") == 0) {
+    handle_dds2_command(num, doc);
+}
+\end{lstlisting}
+
+
+
+El sistema reconoce automáticamente el nuevo módulo dentro del flujo de navegación, manteniendo intacta la arquitectura base.
+
+
+\item \textbf{Integrar el display}
+
+Para la utilización del modulo se puede guiar con el ejemplo \ref{Pantalla}
+
+\end{enumerate}
+\subsubsection{Incorporación de un Nuevo Oscilador Local}
+
+La interfaz también contempla la gestión de osciladores locales, cada uno asociado a un canal del conmutador RF.  
+Estos se definen en la sección \texttt{\#oscillators-section}, donde cada bloque incluye un botón con el atributo \texttt{data-osc-id}:
+
+\begin{lstlisting}[style=arduinoStyle,language=html, caption={Bloque HTML de un nuevo oscilador local.}]
+<div class="instrument-module" data-name="Oscilador 5 (Custom)" style="display:none;">
+  <button class="select-osc-btn full-width" data-osc-id="4">
+    Seleccionar este Oscilador
+  </button>
+</div>
+\end{lstlisting}
+
+El código JavaScript existente detecta automáticamente todos los botones con la clase \texttt{.select-osc-btn} y envía el comando JSON al firmware sin necesidad de agregar manejadores adicionales:
+
+\begin{lstlisting}[style=arduinoStyle,language=html, caption={Manejador genérico para selección de osciladores.}]
+const selectOscButtons = document.querySelectorAll('.select-osc-btn');
+selectOscButtons.forEach(button => {
+  button.addEventListener('click', (event) => {
+    const oscId = parseInt(event.target.dataset.oscId, 10);
+    enviarComando({
+        accion: "select_oscillator",
+        id: oscId
+    });
+  });
+});
+\end{lstlisting}
+
+En el firmware, el despachador central interpreta el comando y delega la acción al \texttt{rf\_switch\_handler}:
+
+\begin{lstlisting}[style=arduinoStyle,language=c++, caption={Procesamiento del comando de selección de oscilador.}]
+else if (strcmp(accion, "select_oscillator") == 0) {
+    uint8_t osc_id = doc["id"];
+    select_oscillator(osc_id);
+}
+\end{lstlisting}
+
+
+
+
+
+
+
+
+
+\section{Verificación del Sistema Mediante Simulación de Hardware}
+
+Para garantizar la correcta implementación del firmware en el microcontrolador ESP32 antes de la integración final del hardware de radiofrecuencia (RF), se adoptó una estrategia de verificación mediante la simulación de periféricos. Esta etapa fue crucial para desacoplar el desarrollo del software de control de la disponibilidad y el ensamblaje de los componentes físicos, permitiendo una validación incremental y robusta de la lógica de comunicación.
+
+\subsection{Estrategia de Simulación}
+El objetivo principal de esta fase fue validar el comportamiento del ESP32 como dispositivo maestro en los tres protocolos de comunicación distintos utilizados por los módulos de RF: I2C, SPI y GPIO (bit-banging). Se decidió emplear una placa Arduino Nano como un simulador de hardware programable, capaz de actuar como un esclavo multi-protocolo.
+
+Los objetivos específicos de la simulación fueron:
+\begin{itemize}
+    \item Validar la correcta inicialización y operación de los buses de comunicación (I2C, SPI) por parte del ESP32.
+    \item Verificar la integridad de los datos transmitidos, asegurando que las tramas de bits y bytes generadas por el ESP32 correspondían a los comandos previstos.
+    \item Confirmar que la lógica de control del firmware maestro era capaz de direccionar y controlar de forma independiente a cada módulo simulado.
+\end{itemize}
+
+\subsection{Implementación del Simulador con Arduino Nano}
+Se desarrolló un sketch específico para la placa Arduino Nano que configuraba sus periféricos para emular el comportamiento de cada módulo de RF. La salida del Monitor Serie del Arduino Nano sirvió como la principal herramienta de verificación, proporcionando un registro en tiempo real de los comandos recibidos, los pulsos detectados y los datos decodificados.
+
+\subsubsection{Simulación del Módulo Si5351 (I2C)}
+El Arduino Nano fue configurado como esclavo I2C en la dirección \texttt{0x60} usando la librería \texttt{Wire.h}. El simulador registraba cualquier transmisión de datos proveniente del ESP32, mostrando la cantidad de bytes recibidos en cada transacción.  
+
+\subsubsection{Simulación del Módulo AD9850 (GPIO Bit-Banging)}
+Para emular el DDS AD9850:
+\begin{itemize}
+    \item Los pines D2 y D3 del Arduino Nano se configuraron con interrupciones externas (INT0 e INT1).
+    \item La línea \texttt{W\_CLK} del ESP32 se conectó al pin D2. Cada flanco ascendente generaba un pulso contado, y en cada pulso se leía el estado de la línea \texttt{DATA} (D4) para reconstruir los 40 bits de la palabra de sintonización.
+    \item La línea \texttt{FQ\_UD} del ESP32 se conectó al pin D3. Cada flanco ascendente indicaba el fin de la transmisión, activando la rutina que calculaba la frecuencia o detectaba la deshabilitación de la salida.
+    \item La frecuencia se obtenía de la palabra de sintonización de 32 bits mediante:
+    \[ f_{\text{out}} = \frac{\text{Palabra de Sintonía} \times f_{\text{clk}}}{2^{32}} \quad (\text{con } f_{\text{clk}} = 125~\text{MHz}) \]
+    \item El Monitor Serie reportaba únicamente la frecuencia calculada al final de cada transmisión o si la salida estaba deshabilitada, evitando saturar la pantalla con cada pulso W\_CLK.
+\end{itemize}
+
+\subsubsection{Simulación del Módulo ADF4351 (SPI)}
+El Arduino Nano se configuró como esclavo SPI:
+\begin{itemize}
+    \item Se habilitó la interrupción de transferencia completa (\texttt{ISR(SPI\_STC\_vect)}) para capturar cada byte enviado por el ESP32.
+    \item La línea \texttt{Slave Select (SS)} activaba el almacenamiento de bytes en un buffer.
+    \item Se esperaba la carga completa de los 6 registros de 32 bits (24 bytes). Al finalizar la transacción (SS en alto), se decodificaban bits clave: habilitación de RF y nivel de potencia (Registro R4).
+    \item El Monitor Serie reportaba la transacción completa indicando frecuencia, estado de habilitación y potencia, sin mostrar cada byte individual.
+\end{itemize}
+
+\subsection{Resultados de la simulación}
+El simulador permitió validar la capa de comunicación del firmware del ESP32. El Monitor Serie del Arduino Nano proporcionó un registro en tiempo real de la actividad:
+
+\begin{itemize}
+    \item Si5351: Bytes I2C recibidos.
+    \item AD9850: Pulsos W\_CLK y FQ\_UD detectados; frecuencia final calculada o salida deshabilitada.
+    \item ADF4351: Transacciones SPI completas (24 bytes) y decodificación de registros clave.
+\end{itemize}
+
+\subsubsection{Ejemplo de Salida del Monitor Serie}
+\begin{verbatim}
+[SIMULADOR RF] Inicializado.
+[Si5351] Escuchando en bus I2C...
+[AD9850] Escuchando pulsos W_CLK y FQ_UD...
+[ADF4351] Escuchando bus SPI...
+
+[AD9850] 11 pulsos W_CLK.
+[AD9850] 29 pulsos W_CLK.
+[AD9850] 1 pulsos FQ_UD.
+[AD9850] 2 pulsos W_CLK.
+[AD9850] 38 pulsos W_CLK.
+[AD9850] 1 pulsos FQ_UD.
+[AD9850] 1 pulsos W_CLK.
+[AD9850] 39 pulsos W_CLK.
+[AD9850] 1 pulsos FQ_UD.
+[ADF4351] 3 bytes SPI.
+[ADF4351] 15 bytes SPI.
+\end{verbatim}
+
+
+
+
+
+\section{Prueba de módulos }
+
+Se realizo las pruebas correspondiente a los módulos para verificar el funcionamiento de del programa y los mismos. 
+
+\subsection{Modulo SI5351}
+
+Mediante la interfaz grafica se pudo ir realizando ajustes de frecuencia y banda. 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=.4\linewidth]{imagenes/vfosi.png}
+    \caption{Interfaz gráfica para el manejo de SI5351}
+    \label{fig:SI5351interfaz}
+\end{figure}
+\begin{figure}[H]
+  \centering
+
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/BANDA2M.jpg}
+    \caption{Banda 2M}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/BANDA6M.jpg}
+    \caption{Banda 6M}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/BANDA10M.jpg}
+    \caption{Banda 10M}
+  \end{subfigure}
+
+  \vspace{1em}
+
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/BANDA13M.jpg}
+    \caption{Banda 13M}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/BANDA16M.jpg}
+    \caption{Banda 16M}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/BANDA20M.jpg}
+    \caption{Banda 20M}
+  \end{subfigure}
+
+  \vspace{1em}
+
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/BANDA22M.jpg}
+    \caption{Banda 22M}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/BANDA22.jpg}
+    \caption{Banda 22}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/BANDAAIR.jpg}
+    \caption{Banda AIR}
+  \end{subfigure}
+
+  \vspace{1em}
+
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/BANDAWRM.jpg}
+    \caption{Banda WRM}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/BANDA.jpg}
+    \caption{Banda }
+  \end{subfigure}
+
+  \caption{Colección de imágenes de bandas de frecuencia del SI5351}
+\end{figure}
+
+\subsection{Módulo AD9850}
+
+Según la hoja de datos del módulo, se indica que puede alimentarse tanto con 3.3 V como con 5 V. Sin embargo, en la práctica se observó que, para que el AD9850 funcione de manera correcta y estable, es necesario alimentarlo con 5 V.
+
+El problema surge al momento de establecer comunicación con la ESP32, ya que sus salidas lógicas operan a 3.3 V. Aunque este nivel suele ser suficiente para diferentes dispositivos digitales, la documentación del AD9850 especifica que el nivel lógico mínimo para reconocer un ``alto'' es de 3.5 V, lo que genera una incompatibilidad directa entre ambos equipos.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{imagenes/Niveles Logicos AD9850.png}
+\caption{Niveles lógicos del AD9850 con alimentación de 5 V}
+\label{fig:niveles_logicos}
+\end{figure}
+
+Para subsanar esta discrepancia de niveles y garantizar la integridad de la señal de control, se optó por no conectar el módulo directamente al procesador principal. En su lugar, se implementó una arquitectura distribuida Maestro-Esclavo utilizando un Arduino Nano como interfaz de adaptación de impedancias y niveles lógicos.
+
+En esta configuración, el ESP32 actúa como \textbf{Maestro I2C}, encargándose de los cálculos matemáticos de frecuencia, mientras que el Arduino Nano opera como \textbf{Esclavo I2C}, recibiendo la palabra de sintonía digital y encargándose de la conmutación física de los pines a 5 V necesarios para excitar el módulo AD9850.
+
+A continuación, en la Figura \ref{fig:diagrama_conexiones}, se presenta el esquema de la interconexión física implementada entre los subsistemas para resolver la incompatibilidad.
+
+\begin{figure}[H]
+\centering
+\begin{small} % Reducimos un poco la fuente para asegurar que encaje
+\begin{verbatim}
+       [ ESP32 ]                         [ ARDUINO NANO ]                      [ AD9850 ]
+    (Maestro - 3.3V)                     (Esclavo - 5V)                     (Generador - 5V)
+   +-------------+                     +----------------+                   +-------------+
+   |             |                     |                |                   |             |
+   |         GND |---------------------| GND            |-------------------| GND         |
+   |             |                     | 5V (Salida)    |-------------------| VCC         |
+   |             |                     |                |                   |             |
+   |   GPIO 21   |         I2C         |                |        SPI        |             |
+   |   (SDA)     |---------------------| A4 (SDA)       |                   |             |
+   |             |                     |                |                   |             |
+   |   GPIO 22   |---------------------| A5 (SCL)       |                   |             |
+   |   (SCL)     |                     |                |                   |             |
+   |             |                     |             D13|-------------------| W_CLK       |
+   |             |                     |             D11|-------------------| DATA (D7)   |
+   |             |                     |             D10|-------------------| FQ_UD       |
+   |             |                     |             GND|-------------------| RESET       |
+   +-------------+                     +----------------+                   +-------------+
+\end{verbatim}
+\end{small}
+\caption{Diagrama de bloques de la interfaz de adaptación con Arduino Nano.}
+\label{fig:diagrama_conexiones}
+\end{figure}
+Mediante la interfaz gráfica se pudo ir realizando ajustes de frecuencia y la habilitación de la salida del mismo. 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{imagenes/AD9850.png}
+    \caption{Interfaz gráfica para el control de AD9850}
+    \label{fig:AD9850}
+\end{figure}
+
+
+
+\begin{figure}[H]
+  \centering
+
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/AD9850/2HZ.jpg}
+    \caption{2Hz}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/AD9850/5KHZ.jpg}
+    \caption{5 KHz}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/AD9850/30KHZ.jpg}
+    \caption{30 KHz}
+  \end{subfigure}
+
+  \vspace{1em}
+
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/AD9850/400KHZ.jpg}
+    \caption{400 KHz}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/AD9850/1.4MHZ.jpg}
+    \caption{1.4MHz}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/AD9850/5.4MHZ.jpg}
+    \caption{Banda 20M}
+  \end{subfigure}
+
+  \vspace{1em}
+
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/AD9850/10MHZ.jpg}
+    \caption{10Mhz}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/AD9850/25MHZ.jpg}
+    \caption{25 Mhz}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/AD9850/40MHZ.jpg}
+    \caption{40 Mhz }
+  \end{subfigure}
+
+  \caption{Colección de imágenes de bandas de frecuencia del SI5351}
+\end{figure}
+
+
+
+\subsection{Módulo ADF4351}
+
+A través de la interfaz gráfica (mostrada en la Figura \ref{fig:ADF4351}) fue posible configurar y ajustar la frecuencia, la potencia de salida, así como habilitar o deshabilitar la salida del módulo.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{ADF4351.png}
+    \caption{Interfaz gráfica para el control del módulo ADF4351.}
+    \label{fig:ADF4351}
+\end{figure}
+
+Dado que el módulo requiere una señal de referencia externa, se implementó un oscilador basado en un cristal de 8 MHz. Adicionalmente, fue necesario configurar la frecuencia del reloj de referencia en el microcontrolador ESP32. Esta configuración se realizó en el archivo de cabecera `config.h`, como se muestra en lo siguiente :
+
+\begin{lstlisting}[style=arduinoStyle, language=c++, caption={Configuración de la frecuencia de referencia de 8 MHz en config.h}]
+#define ADF4351_REF_CLK_HZ 8000000
+\end{lstlisting}
+
+En la Figura \ref{fig:oscilador} se presenta el esquemático del circuito oscilador y la señal de salida generada.
+
+\begin{figure}[H]
+  \begin{subfigure}[b]{0.4\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/EsquematicoOscilador.png}
+    \caption{Esquemático del circuito.}
+  \end{subfigure}
+  \hfill % Espacio horizontal para separar las subfiguras
+    \begin{subfigure}[b]{0.4\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/circuito.jpg}
+    \caption{Circuito implementado }
+  \end{subfigure}
+   \vspace{0.5cm} % espacio vertical entre filas
+  \begin{subfigure}[b]{\textwidth}
+    \includegraphics[width=\textwidth]{imagenes/generador.png}
+    \caption{Señal de salida generada.}
+  \end{subfigure}
+   \caption{Oscilador de 8 MHz.}
+   \label{fig:oscilador}
+\end{figure}
+
+
+
+
+
+\begin{figure}[H]
+  \centering
+
+  % ===== FILA SUPERIOR =====
+  \begin{subfigure}[b]{0.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{imagenes/-4dB.jpg}
+    \caption{-4 dBm}
+    \label{fig:adf4351_-4dBm}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{imagenes/-1dB.jpg}
+    \caption{-1 dBm}
+    \label{fig:adf4351_-1dBm}
+  \end{subfigure}
+
+  \vspace{0.5cm} % espacio vertical entre filas
+
+  % ===== FILA INFERIOR =====
+  \begin{subfigure}[b]{0.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{imagenes/2+dB.jpg}
+    \caption{+2 dBm}
+    \label{fig:adf4351_+2dBm}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{imagenes/5+dB.jpg}
+    \caption{+5 dBm}
+    \label{fig:adf4351_+5dBm}
+  \end{subfigure}
+
+  \caption{Niveles de potencia configurables del sintetizador ADF4351.}
+  \label{fig:adf4351_potencias}
+\end{figure}
+
+
+
+\begin{figure}[H]
+  \centering
+
+  % ===== FILA 1 =====
+  \begin{subfigure}[b]{0.32\textwidth}
+    \centering
+    \includegraphics[height=3.5cm]{imagenes/85Mhz.jpg}
+    \caption{85 MHz}
+    \label{fig:adf4351_85Mhz}
+  \end{subfigure}
+  \hspace{0.1cm}
+  \begin{subfigure}[b]{0.32\textwidth}
+    \centering
+    \includegraphics[height=3.5cm]{imagenes/91Mhz.jpg}
+    \caption{91 MHz}
+    \label{fig:adf4351_91Mhz}
+  \end{subfigure}
+  \hspace{0.1cm}
+  \begin{subfigure}[b]{0.32\textwidth}
+    \centering
+    \includegraphics[height=3.5cm]{imagenes/99Mhz.jpg}
+    \caption{99 MHz}
+    \label{fig:adf4351_99Mhz}
+  \end{subfigure}
+
+  \vspace{0.2cm}
+
+  % ===== FILA 2 =====
+  \begin{subfigure}[b]{0.32\textwidth}
+    \centering
+    \includegraphics[height=3.5cm]{imagenes/100Mhz.jpg}
+    \caption{100 MHz}
+    \label{fig:adf4351_100Mhz}
+  \end{subfigure}
+  \hspace{0.1cm}
+  \begin{subfigure}[b]{0.32\textwidth}
+    \centering
+    \includegraphics[height=3.5cm]{imagenes/101Mhz.jpg}
+    \caption{101 MHz}
+    \label{fig:adf4351_101Mhz}
+  \end{subfigure}
+  \hspace{0.1cm}
+  \begin{subfigure}[b]{0.32\textwidth}
+    \centering
+    \includegraphics[height=3.5cm]{imagenes/105Mhz.jpg}
+    \caption{105 MHz}
+    \label{fig:adf4351_105Mhz}
+  \end{subfigure}
+
+  \caption{Frecuencias de salida del sintetizador ADF4351 observadas en distintas configuraciones.}
+  \label{fig:adf4351_frecuencias_2filas}
+\end{figure}
+\section{Selección de la Arquitectura de Comunicación WAN}
+Para dotar al sistema de capacidades de control y telemetría fuera de la red de área local (WAN), se realizó un análisis comparativo entre la exposición del servidor WebSocket preexistente y la integración de una plataforma de \textit{Cloud Computing} gestionada.
+Inicialmente, se evaluó la viabilidad de exponer el servidor WebSocket del ESP32 directamente a Internet. Sin embargo, esta aproximación fue descartada debido a las barreras arquitectónicas inherentes a las redes domésticas residenciales y los riesgos de seguridad asociados. Dado que el dispositivo opera detrás de un router que implementa Traducción de Direcciones de Red (NAT) y, en muchos casos, CGNAT (\textit{Carrier-Grade NAT}), el acceso externo directo presenta inconvenientes críticos:
+\begin{itemize}
+\item \textbf{Complejidad en la Configuración de Red (Port Forwarding):} El modelo de WebSocket requiere que el cliente inicie la conexión hacia el servidor. Esto obligaría al usuario final a realizar configuraciones avanzadas en su router para redirigir el tráfico de un puerto público (WAN) hacia la IP privada del ESP32 (LAN), eliminando la característica \textit{plug-and-play} del producto.
+\item \textbf{Dependencia de IP Pública y DDNS:} La mayoría de las conexiones residenciales disponen de direcciones IP públicas dinámicas. Garantizar la accesibilidad requeriría la implementación y mantenimiento de servicios de DNS Dinámico (DDNS) para resolver la dirección IP cambiante del hogar.
+\item \textbf{Superficie de Ataque Expuesta:} La apertura de puertos en el router expone la red local a escaneos masivos y ataques directos desde Internet, comprometiendo la integridad no solo del instrumento, sino de toda la red del usuario.
+\end{itemize}
+\subsection{Adopción de Arduino IoT Cloud}
+En consecuencia, se optó por una arquitectura basada en un intermediario o \textit{Broker}, implementada a través de \textbf{Arduino IoT Cloud}. Esta solución invierte el modelo de conexión: en lugar de esperar una conexión entrante, el ESP32 establece una conexión saliente (\textit{outbound connection}) hacia los servidores de Arduino utilizando el protocolo MQTT sobre canales cifrados (SSL/TLS).
+Esta arquitectura ofrece ventajas decisivas para el despliegue del sistema:
+\begin{enumerate}
+\item \textbf{Transversalidad de NAT:} Al ser el dispositivo quien inicia la comunicación hacia la nube, el tráfico es interpretado por el firewall del router como una solicitud estándar permitida (similar a navegar por una web), eliminando la necesidad de reenvío de puertos.
+\item \textbf{Seguridad y Autenticación:} La comunicación se cifra extremo a extremo, y la autenticación del dispositivo se gestiona mediante un \textit{Device ID} y una clave secreta pre-aprovisionada, delegando la gestión de seguridad en la infraestructura del proveedor.
+\item \textbf{Abstracción del Estado (Pattern Bridge):} La adopción de esta plataforma permitió implementar un patrón de diseño ``Bridge'' en el firmware, donde las variables sincronizadas en la nube actúan como disparadores que ejecutan la misma lógica de control interna ya desarrollada para la interfaz local, unificando el comportamiento del sistema independientemente del origen del comando.
+\end{enumerate}
+\section{Conclusión}
+Mi participación en el proyecto del laboratorio remoto se centró en la documentación y estructuración de sus componentes fundamentales, estableciendo así una base sólida para su desarrollo futuro. Esta labor incluyó la descripción detallada de la arquitectura de control, basada en el ESP32 y la comunicación I2C, SPI y GPIO así como la definición funcional de la interfaz web y la lógica de conectividad WiFi.  
+
+Agradezco especialmente a los docentes Carlos A. Zerbini y Guillermo Gastón Riva por brindarme la oportunidad de participar en este proyecto y por su  apoyo.
+
+
+\end{document}
+

@@ -1,0 +1,307 @@
+/*
+  Instrumento Virtual Híbrido con Portal WiFi y Monitor OLED
+  - VERSIÓN CON PANTALLA DE ESTADO GENERAL MINIMALISTA Y VFO
+*/
+
+// ==========================================================
+// SECCIÓN DE LIBRERÍAS Y MÓDULOS
+// ==========================================================
+#include <WiFi.h>
+#include <SPI.h>
+#include <WebServer.h>
+#include <EEPROM.h>
+#include <WebSocketsServer.h>
+#include <Wire.h>
+#include <ArduinoJson.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SH110X.h>
+#include <si5351.h>
+#include "ad9850_handler.h"  
+#include "adf4351_handler.h" 
+#include "config.h"
+#include "portal_config.h"
+#include "display_handler.h"
+#include "i2c_scanner.h"
+#include "vfo_handler.h"
+#include "rf_switch_handler.h" 
+// ==========================================================
+// SECCIÓN DE OBJETOS GLOBALES
+// ==========================================================
+Adafruit_SH1106G display(ANCHO, ALTO, &Wire, -1);
+Si5351 si5351;
+WebServer server(80);
+WebSocketsServer webSocket = WebSocketsServer(81);
+StaticJsonDocument<512> doc;
+
+// La definición de DisplayState ahora está en display_handler.h
+// Aquí solo declaramos la variable global que usará todo el proyecto.
+DisplayState currentDisplayState;
+
+// ==========================================================
+// SECCIÓN DE VARIABLES GLOBALES
+// ==========================================================
+const char* ap_ssid = "ESP32_Config";
+const char* ap_pass = "12345678";
+String ipAddressLine = "";
+bool si5351_present = false;
+int connectedModuleCount = 0;
+int webSocketClients = 0;
+
+
+/*******************************************************************
+// SECCIÓN 2: LÓGICA WEBSOCKET HÍBRIDA
+//*******************************************************************/
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+  switch (type) {
+    case WStype_DISCONNECTED:
+      Serial.printf("[Cliente %u] Desconectado!\n", num);
+      if(webSocketClients > 0) webSocketClients--;
+      showMainScreen();
+      break;
+    case WStype_CONNECTED: {
+      IPAddress ip = webSocket.remoteIP(num);
+      Serial.printf("[Cliente %u] Conectado desde %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
+      webSocketClients++;
+      showMainScreen();
+      // Al conectarse un nuevo cliente, le enviamos el estado actual del VFO
+      handleVfoCommand(num, doc); // Usamos un doc vacío para que solo devuelva el estado
+      break;
+    }
+    case WStype_TEXT:
+      Serial.println("[Cliente " + String(num) + "] RX: " + String((char*)payload));
+      doc.clear();
+      DeserializationError error = deserializeJson(doc, payload);
+
+      if (error) { return; }
+
+      const char* accion = doc["accion"];
+      
+      if (strcmp(accion, "escanear_i2c") == 0) {
+          performI2CScanAndReply(num);
+          return;
+      } 
+
+      else if (strcmp(accion, "vfo_command") == 0) {
+        // Tarea 1: Orquestar el switch (ID 0 para Si5351)
+        select_generator(0);
+        // Tarea 2: Delegar al especialista
+        handleVfoCommand(num, doc);
+        return;
+      }
+      else if (strcmp(accion, "ad9850_command") == 0) {
+        // Tarea 1: Orquestar el switch (ID 1 para AD9850)
+        select_generator(1);
+        // Tarea 2: Delegar al especialista
+        handle_ad9850_command(num, doc);
+        return;
+      }
+      else if (strcmp(accion, "adf4351_command") == 0) {
+        // Tarea 1: Orquestar el switch (ID 2 para ADF4351)
+        select_generator(2);
+        // Tarea 2: Delegar al especialista
+        handle_adf4351_command(num, doc);
+        return;
+      }
+           else if (strcmp(accion, "select_oscillator") == 0) {
+        if (doc.containsKey("id")) {
+          uint8_t osc_id = doc["id"];
+          // El orquestador llama directamente al especialista de switches.
+          select_oscillator(osc_id);
+          // Opcional: enviar confirmación a la UI
+          StaticJsonDocument<100> res; res["status"] = "ok"; res["accion"] = "respuesta_osc_select"; res["selected_id"] = osc_id; String out; serializeJson(res, out); webSocket.sendTXT(num, out);
+           String msg = "OSC " + String(osc_id) + " SELECCIONADO";
+          updateOledStatus(msg); // Muestra el mensaje temporal en pantalla grande
+          delay(2000);           // Espera 2 segundos
+          showMainScreen();      // Vuelve a dibujar la pantalla principal
+          // 
+        }
+      }
+      // -
+      else if (strcmp(accion, "oled_command") == 0) {
+        updateOledStatus("CMD OLED");
+        const char* sub_accion = doc["sub_accion"];
+        String mensaje_respuesta = "Comando OLED OK.";
+        StaticJsonDocument<256> responseDoc;
+
+        Wire.beginTransmission(OLED_ADDR);
+        if (Wire.endTransmission() != 0) {
+            responseDoc["status"] = "error";
+            responseDoc["mensaje"] = "Fallo al comunicar con el display OLED.";
+        } else {
+            if (strcmp(sub_accion, "clear") == 0) {
+                display.clearDisplay();
+                display.display();
+                mensaje_respuesta = "Display limpiado.";
+            } else if (strcmp(sub_accion, "print") == 0) {
+                const char* texto = doc["texto"];
+                display.clearDisplay();
+                display.setCursor(0, 0);
+                display.print(texto);
+                display.display();
+                mensaje_respuesta = "Texto '" + String(texto) + "' escrito.";
+            } else {
+                mensaje_respuesta = "Sub-accion OLED no reconocida.";
+            }
+            responseDoc["status"] = "ok";
+            responseDoc["mensaje"] = mensaje_respuesta;
+        }
+        responseDoc["accion"] = "respuesta_oled";
+        String output; serializeJson(responseDoc, output); webSocket.sendTXT(num, output);
+        return;
+    }
+    else if (strcmp(accion, "transaccion_i2c") == 0) {
+        int direccion = doc["direccion"];
+        bool error_flag = false;
+        byte i2c_error = 0;
+        StaticJsonDocument<256> responseDoc;
+
+        if (direccion < 8 || direccion > 119) {
+            responseDoc["status"] = "error";
+            responseDoc["mensaje"] = "Direccion I2C invalida.";
+            responseDoc["accion"] = "respuesta_i2c";
+            responseDoc["direccion"] = direccion;
+            String output; serializeJson(responseDoc, output); webSocket.sendTXT(num, output);
+            return;
+        }
+
+        if (doc.containsKey("bytes_a_escribir")) {
+            updateOledStatus("I2C WRITE");
+            JsonArray bytes_a_escribir = doc["bytes_a_escribir"].as<JsonArray>();
+            bool keep_connection_open = doc.containsKey("bytes_a_leer") && doc["bytes_a_leer"].as<int>() > 0;
+            Wire.beginTransmission(direccion);
+            for (JsonVariant v : bytes_a_escribir) {
+              Wire.write(v.as<byte>());
+            }
+            i2c_error = Wire.endTransmission(!keep_connection_open);
+            if (i2c_error != 0) {
+              error_flag = true;
+            }
+        }
+
+        if (!error_flag && doc.containsKey("bytes_a_leer")) {
+            if (!error_flag) {
+                updateOledStatus("I2C READ");
+                int bytes_a_leer = doc["bytes_a_leer"];
+                if (bytes_a_leer > 0 && bytes_a_leer <= 32) {
+                    uint8_t received_bytes = Wire.requestFrom(direccion, bytes_a_leer);
+                    if (received_bytes == bytes_a_leer) {
+                        JsonArray datos = responseDoc.createNestedArray("datos");
+                        for (int i = 0; i < bytes_a_leer; i++) {
+                          datos.add(Wire.read());
+                        }
+                        responseDoc["status"] = "ok";
+                    } else {
+                        responseDoc["status"] = "error";
+                        responseDoc["mensaje"] = "No se recibieron los bytes esperados.";
+                    }
+                } else {
+                     responseDoc["status"] = "error";
+                     responseDoc["mensaje"] = "No se pueden leer mas de 32 bytes.";
+                }
+            }
+        } 
+        
+        if (!responseDoc.containsKey("status")) {
+            if (error_flag) {
+                responseDoc["status"] = "error";
+                responseDoc["mensaje"] = "Error I2C en escritura: " + String(i2c_error);
+            } else {
+                responseDoc["status"] = "ok";
+            }
+        }
+        
+        responseDoc["accion"] = "respuesta_i2c";
+        responseDoc["direccion"] = direccion;
+        
+        delay(1000);
+        showMainScreen();
+
+        String output;
+        serializeJson(responseDoc, output);
+        webSocket.sendTXT(num, output);
+        return; 
+    }
+    else {
+      StaticJsonDocument<200> errorDoc;
+      errorDoc["status"] = "error"; 
+      errorDoc["mensaje"] = "Accion no reconocida.";
+      String output; serializeJson(errorDoc, output); webSocket.sendTXT(num, output);
+    }
+      break;
+  }
+}
+
+void startWebSocketServer() {
+  webSocket.begin();
+  webSocket.onEvent(webSocketEvent);
+}
+
+//*******************************************************************
+// SECCIÓN 3: SETUP Y LOOP PRINCIPAL
+//*******************************************************************
+void setup() {
+  Serial.begin(115200);
+  Wire.begin(); 
+  Wire.setTimeOut(250); 
+  
+  display_setup();
+  delay(1000);
+  
+  printToAll("Escaneando modulos...");
+  byte count = 0;
+  for (byte i = 1; i < 127; i++) {
+    if (i == OLED_ADDR) continue;
+    Wire.beginTransmission(i);
+    if (Wire.endTransmission() == 0) {
+      count++;
+    }
+  }
+  connectedModuleCount = count;
+  Serial.printf("Se encontraron %d modulos I2C.\n", connectedModuleCount);
+  delay(1500);
+
+  // La función vfo_setup() ahora se encarga de inicializar el Si5351
+  vfo_setup();
+  delay(100);
+   
+  ad9850_setup(); // <--- NUEVO
+  delay(100);
+  adf4351_setup(); // <--- NUEVO
+  delay(100);
+
+  EEPROM.begin(512);
+  String ssid = EEPROM.readString(0);
+  String pass = EEPROM.readString(100);
+  EEPROM.end();
+
+  if(ssid.length() > 0){
+    printToAll("Conectando a:\n" + ssid);
+    WiFi.begin(ssid.c_str(), pass.c_str());
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+      delay(500);
+      Serial.print(".");
+      attempts++;
+    }
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    ipAddressLine = "IP: " + WiFi.localIP().toString();
+    startWebSocketServer();
+    printToAll("Servidor WebSocket ON");
+    delay(2000);
+    showMainScreen();
+  } else {
+    WiFi.disconnect();
+    printToAll("Fallo de conexion.\nIniciando Modo AP.");
+    startAP();
+  }
+}
+
+void loop() {
+  if (WiFi.status() == WL_CONNECTED) {
+    webSocket.loop();
+  } else {
+    server.handleClient();
+  }
+}

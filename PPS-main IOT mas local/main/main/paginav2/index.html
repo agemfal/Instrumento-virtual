@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instrumento Virtual ESP32 - Panel de Control</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header y Sección de Conexión (Sin cambios) -->
+        <header>
+            <h1>Panel de Control</h1>
+            <p style="margin-top:-10px; color: var(--color-dark-gray);">Instrumento Virtual Modular basado en ESP32</p>
+            <div class="control-group">
+                <label for="esp32-ip">Dirección IP del Dispositivo:</label>
+                <input type="text" id="esp32-ip" placeholder="Ej: 192.168.1.100">
+                <button id="connect-btn" style="margin-top:10px;">Conectar</button>
+            </div>
+        </header>
+        <main>
+            <section>
+                <h2>Estado de Conexión</h2>
+                <div id="status-bar" class="status-disconnected">Desconectado</div>
+            </section>
+            
+            <!-- Sección de Generadores (Sin cambios) -->
+            <section id="generators-section">
+                <h2>Generadores de Señales</h2>
+                 <div class="menu-controls">
+                    <button id="gen-prev-btn">◀ Anterior</button>
+                    <span id="gen-name-display" class="module-name">VFO Si5351</span>
+                    <button id="gen-next-btn">Siguiente ▶</button>
+                </div>
+                <div id="vfo-module" class="instrument-module" data-name="VFO Si5351">
+                    <!-- Contenido del VFO -->
+                    <div class="instrument-display"><p><strong>Frecuencia:</strong> <span id="vfo-freq">--</span> MHz</p><p><strong>Banda:</strong> <span id="vfo-band">--</span></p><p><strong>Paso:</strong> <span id="vfo-step">--</span></p><p><strong>Modo:</strong> <span id="vfo-mode">--</span></p></div><div class="encoder-controls"><button id="vfo-freq-down-btn">&lt;&lt; Freq</button><button id="vfo-freq-up-btn">Freq &gt;&gt;</button><button id="vfo-band-btn">Cambiar Banda</button><button id="vfo-step-btn">Cambiar Paso</button></div><button id="vfo-rxtx-btn" class="full-width" style="margin-top: 10px;">Cambiar a TX</button>
+                </div>
+                <div id="ad9850-module" class="instrument-module" data-name="Gen AD9850" style="display: none;">
+                    <!-- Contenido del AD9850 -->
+                    <div class="instrument-display"><p><strong>Frecuencia:</strong> <span id="ad9850-freq-display">---</span></p><p><strong>Estado:</strong> <span id="ad9850-status-display" class="status-off">---</span></p></div><div class="control-group"><input type="number" id="ad9850-freq-input" placeholder="Frecuencia en Hz (0 - 40M)"><button id="ad9850-set-freq-btn">Establecer</button></div><div class="control-group"><button id="ad9850-enable-btn" class="btn-on">Habilitar Salida</button><button id="ad9850-disable-btn" class="btn-off">Deshabilitar Salida</button></div>
+                </div>
+                <div id="adf4351-module" class="instrument-module" data-name="Synth ADF4351" style="display: none;">
+                    <!-- Contenido del ADF4351 -->
+                    <div class="instrument-display"><p><strong>Frecuencia:</strong> <span id="adf4351-freq-display">---</span></p><p><strong>Potencia:</strong> <span id="adf4351-power-display">---</span></p><p><strong>Estado:</strong> <span id="adf4351-status-display" class="status-off">---</span></p></div><div class="control-group"><input type="number" id="adf4351-freq-input" placeholder="Frecuencia en Hz (35M - 4.4G)"><button id="adf4351-set-freq-btn">Establecer</button></div><div class="control-group"><label for="adf4351-power-select">Nivel de Potencia:</label><select id="adf4351-power-select"><option value="0">-4 dBm</option><option value="1">-1 dBm</option><option value="2">+2 dBm</option><option value="3">+5 dBm</option></select></div><div class="control-group"><button id="adf4351-enable-btn" class="btn-on">Habilitar Salida</button><button id="adf4351-disable-btn" class="btn-off">Deshabilitar Salida</button></div>
+<!-- Guía de controles del teclado -->
+<div class="keyboard-controls">
+  <h3>Atajos de teclado - ADF4351</h3>
+  <p><kbd>x</kbd> / <kbd>c</kbd> → ±10 Hz</p>
+  <p><kbd>s</kbd> / <kbd>d</kbd> → ±100 Hz</p>
+  <p><kbd>w</kbd> / <kbd>e</kbd> → ±1 kHz</p>
+  <p><kbd>2</kbd> / <kbd>3</kbd> → ±10 kHz</p>
+  <p><kbd>1</kbd> / <kbd>4</kbd> → ±100 kHz</p>
+  <p><kbd>5</kbd> / <kbd>6</kbd> → ±10 MHz</p>
+  <p><kbd>/</kbd> → Activar/Desactivar salida RF</p>
+  <p><kbd>+</kbd> / <kbd>-</kbd> → Aumentar/Disminuir potencia RF</p>
+</div>
+
+                </div>
+            </section>
+
+            <!-- ========================================================== -->
+            <!-- ============= GRUPO: OSCILADORES LOCALES (MODIFICADO) ==== -->
+            <!-- ========================================================== -->
+            <section id="oscillators-section">
+                <h2>Osciladores Locales</h2>
+                <div class="menu-controls">
+                    <button id="osc-prev-btn">◀ Anterior</button>
+                    <span id="osc-name-display" class="module-name">Oscilador 1</span>
+                    <button id="osc-next-btn">Siguiente ▶</button>
+                </div>
+
+                <!-- Módulo Oscilador 1 -->
+                <div class="instrument-module" data-name="Oscilador 1 (PLL A)">
+                    <!-- ===== BOTÓN AÑADIDO ===== -->
+                    <button class="select-osc-btn full-width" data-osc-id="0">Seleccionar este Oscilador</button>
+                </div>
+
+                <!-- Módulo Oscilador 2 -->
+                <div class="instrument-module" data-name="Oscilador 2 (PLL B)" style="display: none;">
+                    <!-- ===== BOTÓN AÑADIDO ===== -->
+                    <button class="select-osc-btn full-width" data-osc-id="1">Seleccionar este Oscilador</button>
+                </div>
+                
+                <!-- Módulo Oscilador 3 -->
+                <div class="instrument-module" data-name="Oscilador 3 (DDS)" style="display: none;">
+                    <!-- ===== BOTÓN AÑADIDO ===== -->
+                    <button class="select-osc-btn full-width" data-osc-id="2">Seleccionar este Oscilador</button>
+                </div>
+
+                <!-- Módulo Oscilador 4 -->
+                <div class="instrument-module" data-name="Oscilador 4 (Custom)" style="display: none;">
+
+                    <!-- ===== BOTÓN AÑADIDO ===== -->
+                    <button class="select-osc-btn full-width" data-osc-id="3">Seleccionar este Oscilador</button>
+                </div>
+            </section>
+
+            <!-- Secciones de Diagnóstico y Log (Sin cambios) -->
+            <section class="scanner-module"><h2>Diagnóstico del Bus</h2><button id="scan-i2c-btn">Escanear Bus I2C</button><div id="scan-results"><p>Los resultados del escaneo aparecerán aquí...</p></div></section>
+            <section class="log-module"><h2>Registro de Eventos</h2><div id="response-log"></div></section>
+        </main>
+      
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

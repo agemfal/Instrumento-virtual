@@ -1,0 +1,397 @@
+/*
+  Instrumento Virtual Híbrido con Portal WiFi y Monitor OLED
+  - VERSIÓN CON PANTALLA DE ESTADO GENERAL MINIMALISTA Y VFO
+  - INTEGRACIÓN ARDUINO IOT CLOUD (BRIDGE PATTERN)
+  - CORRECCIÓN: INICIO DE WEBSOCKET POR CALLBACK
+*/
+
+// ==========================================================
+// SECCIÓN DE LIBRERÍAS Y MÓDULOS
+// ==========================================================
+#include <WiFi.h>
+#include <SPI.h>
+#include <WebServer.h>
+#include <EEPROM.h>
+#include <WebSocketsServer.h>
+#include <Wire.h>
+#include <ArduinoJson.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SH110X.h>
+#include <si5351.h>
+
+// Módulos del proyecto
+#include "ad9850_handler.h"  
+#include "adf4351_handler.h" 
+#include "config.h"
+#include "portal_config.h"
+#include "display_handler.h"
+#include "i2c_scanner.h"
+#include "vfo_handler.h"
+#include "rf_switch_handler.h" 
+
+// INTEGRACIÓN NUBE
+#include "main_interface.h"  // Define CLOUD_CLIENT_ID y la firma de la función central
+#include "thingProperties.h" // Generado por Arduino Cloud
+
+// ==========================================================
+// SECCIÓN DE OBJETOS GLOBALES
+// ==========================================================
+Adafruit_SH1106G display(ANCHO, ALTO, &Wire, -1);
+Si5351 si5351;
+WebServer server(80);
+WebSocketsServer webSocket = WebSocketsServer(81);
+StaticJsonDocument<512> doc;
+
+DisplayState currentDisplayState;
+
+// ==========================================================
+// SECCIÓN DE VARIABLES GLOBALES
+// ==========================================================
+const char* ap_ssid = "ESP32_Config";
+const char* ap_pass = "12345678";
+String ipAddressLine = "";
+bool si5351_present = false;
+int connectedModuleCount = 0;
+int webSocketClients = 0;
+
+// ==========================================================
+// CALLBACKS DE CONEXIÓN (NUEVO)
+// ==========================================================
+void startWebSocketServer(); // Prototipo
+
+// Esta función se ejecuta AUTOMÁTICAMENTE cuando la nube se conecta
+void onCloudConnect() {
+  Serial.println(F(">>> EVENTO: Nube Conectada. Iniciando WebSockets..."));
+  
+  // Iniciamos el WebSocket aquí para asegurar que el WiFi ya es estable
+  startWebSocketServer();
+  
+  ipAddressLine = "IP: " + WiFi.localIP().toString();
+  printToAll("ONLINE!\n" + ipAddressLine);
+}
+
+/*******************************************************************
+// NUEVA FUNCIÓN CENTRAL: ORQUESTADOR DE COMANDOS
+// Recibe órdenes tanto del WebSocket como del Cloud Bridge
+//*******************************************************************/
+void ejecutarComandoCentral(uint8_t clientNum, JsonDocument& doc) {
+  const char* accion = doc["accion"];
+  
+  // LOG para depuración
+  if (clientNum == CLOUD_CLIENT_ID) {
+    Serial.println("[BRIDGE] Ejecutando comando desde la Nube: " + String(accion));
+  }
+
+  // 1. ESCANER I2C
+  if (strcmp(accion, "escanear_i2c") == 0) {
+      performI2CScanAndReply(clientNum);
+      return;
+  } 
+
+  // 2. COMANDOS VFO (Si5351)
+  else if (strcmp(accion, "vfo_command") == 0) {
+    select_generator(0); // Switch HW
+    handleVfoCommand(clientNum, doc); // Lógica
+    return;
+  }
+  
+  // 3. COMANDOS AD9850
+  else if (strcmp(accion, "ad9850_command") == 0) {
+    select_generator(1); // Switch HW
+    handle_ad9850_command(clientNum, doc); // Lógica
+    return;
+  }
+  
+  // 4. COMANDOS ADF4351
+  else if (strcmp(accion, "adf4351_command") == 0) {
+    select_generator(2); // Switch HW
+    handle_adf4351_command(clientNum, doc); // Lógica
+    return;
+  }
+  
+  // 5. SELECCIÓN DE OSCILADOR (Switch Secundario)
+  else if (strcmp(accion, "select_oscillator") == 0) {
+    if (doc.containsKey("id")) {
+      uint8_t osc_id = doc["id"];
+      select_oscillator(osc_id);
+      
+      // Respuesta visual
+      String msg = "OSC " + String(osc_id) + " SELECCIONADO";
+      updateOledStatus(msg); 
+      delay(1000);           
+      showMainScreen();      
+
+      // Confirmación al cliente (Solo si es WebSocket real para no saturar)
+      if (clientNum != CLOUD_CLIENT_ID) {
+        StaticJsonDocument<100> res; 
+        res["status"] = "ok"; 
+        res["accion"] = "respuesta_osc_select"; 
+        res["selected_id"] = osc_id; 
+        String out; serializeJson(res, out); 
+        webSocket.sendTXT(clientNum, out);
+      }
+    }
+  }
+  
+  // 6. COMANDOS OLED DIRECTOS
+  else if (strcmp(accion, "oled_command") == 0) {
+    updateOledStatus("CMD OLED");
+    const char* sub_accion = doc["sub_accion"];
+    String mensaje_respuesta = "Comando OLED OK.";
+    StaticJsonDocument<256> responseDoc;
+
+    Wire.beginTransmission(OLED_ADDR);
+    if (Wire.endTransmission() != 0) {
+        responseDoc["status"] = "error";
+        responseDoc["mensaje"] = "Fallo al comunicar con el display OLED.";
+    } else {
+        if (strcmp(sub_accion, "clear") == 0) {
+            display.clearDisplay();
+            display.display();
+            mensaje_respuesta = "Display limpiado.";
+        } else if (strcmp(sub_accion, "print") == 0) {
+            const char* texto = doc["texto"];
+            display.clearDisplay();
+            display.setCursor(0, 0);
+            display.print(texto);
+            display.display();
+            mensaje_respuesta = "Texto '" + String(texto) + "' escrito.";
+        } else {
+            mensaje_respuesta = "Sub-accion OLED no reconocida.";
+        }
+        responseDoc["status"] = "ok";
+        responseDoc["mensaje"] = mensaje_respuesta;
+    }
+    
+    // Enviar respuesta solo si es WebSocket
+    if (clientNum != CLOUD_CLIENT_ID) {
+      responseDoc["accion"] = "respuesta_oled";
+      String output; serializeJson(responseDoc, output); 
+      webSocket.sendTXT(clientNum, output);
+    }
+    return;
+  }
+
+  // 7. TRANSACCIONES I2C DIRECTAS (RAW)
+  else if (strcmp(accion, "transaccion_i2c") == 0) {
+      int direccion = doc["direccion"];
+      bool error_flag = false;
+      byte i2c_error = 0;
+      StaticJsonDocument<256> responseDoc;
+
+      if (direccion < 8 || direccion > 119) {
+          if (clientNum != CLOUD_CLIENT_ID) {
+             responseDoc["status"] = "error";
+             responseDoc["mensaje"] = "Direccion I2C invalida.";
+             responseDoc["accion"] = "respuesta_i2c";
+             responseDoc["direccion"] = direccion;
+             String output; serializeJson(responseDoc, output); webSocket.sendTXT(clientNum, output);
+          }
+          return;
+      }
+
+      if (doc.containsKey("bytes_a_escribir")) {
+          updateOledStatus("I2C WRITE");
+          JsonArray bytes_a_escribir = doc["bytes_a_escribir"].as<JsonArray>();
+          bool keep_connection_open = doc.containsKey("bytes_a_leer") && doc["bytes_a_leer"].as<int>() > 0;
+          Wire.beginTransmission(direccion);
+          for (JsonVariant v : bytes_a_escribir) {
+            Wire.write(v.as<byte>());
+          }
+          i2c_error = Wire.endTransmission(!keep_connection_open);
+          if (i2c_error != 0) {
+            error_flag = true;
+          }
+      }
+
+      if (!error_flag && doc.containsKey("bytes_a_leer")) {
+          if (!error_flag) {
+              updateOledStatus("I2C READ");
+              int bytes_a_leer = doc["bytes_a_leer"];
+              if (bytes_a_leer > 0 && bytes_a_leer <= 32) {
+                  uint8_t received_bytes = Wire.requestFrom(direccion, bytes_a_leer);
+                  if (received_bytes == bytes_a_leer) {
+                      JsonArray datos = responseDoc.createNestedArray("datos");
+                      for (int i = 0; i < bytes_a_leer; i++) {
+                        datos.add(Wire.read());
+                      }
+                      responseDoc["status"] = "ok";
+                  } else {
+                      responseDoc["status"] = "error";
+                      responseDoc["mensaje"] = "No se recibieron los bytes esperados.";
+                  }
+              } else {
+                   responseDoc["status"] = "error";
+                   responseDoc["mensaje"] = "No se pueden leer mas de 32 bytes.";
+              }
+          }
+      } 
+      
+      if (!responseDoc.containsKey("status")) {
+          if (error_flag) {
+              responseDoc["status"] = "error";
+              responseDoc["mensaje"] = "Error I2C en escritura: " + String(i2c_error);
+          } else {
+              responseDoc["status"] = "ok";
+          }
+      }
+      
+      delay(1000);
+      showMainScreen();
+
+      if (clientNum != CLOUD_CLIENT_ID) {
+        responseDoc["accion"] = "respuesta_i2c";
+        responseDoc["direccion"] = direccion;
+        String output; serializeJson(responseDoc, output);
+        webSocket.sendTXT(clientNum, output);
+      }
+      return; 
+  }
+  else {
+    // Comando desconocido
+    if (clientNum != CLOUD_CLIENT_ID) {
+      StaticJsonDocument<200> errorDoc;
+      errorDoc["status"] = "error"; 
+      errorDoc["mensaje"] = "Accion no reconocida.";
+      String output; serializeJson(errorDoc, output); webSocket.sendTXT(clientNum, output);
+    }
+  }
+}
+
+/*******************************************************************
+// WEBSOCKET EVENT (REFACTORIZADO)
+// Ahora solo recibe datos y llama a ejecutarComandoCentral
+//*******************************************************************/
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+  switch (type) {
+    case WStype_DISCONNECTED:
+      Serial.printf("[Cliente %u] Desconectado!\n", num);
+      if(webSocketClients > 0) webSocketClients--;
+      showMainScreen();
+      break;
+      
+    case WStype_CONNECTED: {
+      IPAddress ip = webSocket.remoteIP(num);
+      Serial.printf("[Cliente %u] Conectado desde %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
+      webSocketClients++;
+      showMainScreen();
+      // Al conectarse un nuevo cliente, le enviamos el estado actual del VFO
+      doc.clear();
+      handleVfoCommand(num, doc); 
+      break;
+    }
+    
+    case WStype_TEXT:
+      Serial.println("[Cliente " + String(num) + "] RX: " + String((char*)payload));
+      doc.clear();
+      DeserializationError error = deserializeJson(doc, payload);
+
+      if (error) { 
+        Serial.println(F("Error deserializando JSON"));
+        return; 
+      }
+
+      // LLAMADA A LA LÓGICA CENTRAL
+      ejecutarComandoCentral(num, doc);
+      break;
+  }
+}
+
+void startWebSocketServer() {
+  webSocket.begin();
+  webSocket.onEvent(webSocketEvent);
+  Serial.println(F("Servidor WebSocket Iniciado."));
+}
+
+//*******************************************************************
+// SECCIÓN 3: SETUP Y LOOP PRINCIPAL
+//*******************************************************************
+void setup() {
+  Serial.begin(115200);
+  Wire.begin(); 
+  Wire.setTimeOut(250); 
+  
+  display_setup();
+  delay(1000);
+  
+  // --- ESCANEO I2C ---
+  printToAll("Escaneando modulos...");
+  byte count = 0;
+  for (byte i = 1; i < 127; i++) {
+    if (i == OLED_ADDR) continue;
+    Wire.beginTransmission(i);
+    if (Wire.endTransmission() == 0) {
+      count++;
+    }
+  }
+  connectedModuleCount = count;
+  Serial.printf("Se encontraron %d modulos I2C.\n", connectedModuleCount);
+  delay(1500);
+
+  // --- INICIALIZACIÓN DE HARDWARE ---
+  vfo_setup();
+  delay(100);
+  ad9850_setup(); 
+  delay(100);
+  adf4351_setup(); 
+  delay(100);
+  rf_switch_setup();
+
+  // --- LECTURA DE CREDENCIALES (EEPROM) ---
+  EEPROM.begin(512);
+  String ssid = EEPROM.readString(0);
+  String pass = EEPROM.readString(100);
+  EEPROM.end();
+
+  // --- CONEXIÓN A LA NUBE DINÁMICA ---
+  if(ssid.length() > 0){
+    printToAll("Conectando a:\n" + ssid);
+    
+    // 1. Creamos el manejador de conexión con los datos de la EEPROM
+    ArduinoIoTPreferredConnection = new WiFiConnectionHandler(ssid.c_str(), pass.c_str());
+    
+    // 2. Inicializamos las propiedades (vincula variables)
+    initProperties(); 
+    
+    // 3. REGISTRAR CALLBACK: Esto es lo que arregla tu problema.
+    // El WebSocket solo se iniciará cuando la nube diga "Estoy lista".
+    ArduinoCloud.addCallback(ArduinoIoTCloudEvent::CONNECT, onCloudConnect);
+
+    // 4. Iniciamos la Nube (esto dispara la conexión WiFi automáticamente)
+    ArduinoCloud.begin(*ArduinoIoTPreferredConnection);
+    
+    setDebugMessageLevel(2);
+    ArduinoCloud.printDebugInfo();
+    
+    // 5. Espera visual (Opcional, pero útil para ver qué pasa)
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+      delay(500);
+      Serial.print(".");
+      attempts++;
+    }
+  } else {
+    // Si no hay datos en EEPROM
+    WiFi.disconnect();
+    printToAll("Fallo de conexion.\nIniciando Modo AP.");
+    startAP();
+  }
+  
+  Serial.print("Memoria Libre: ");
+  Serial.println(ESP.getFreeHeap());
+}
+
+void loop() {
+  // 1. PRIORIDAD AL WEBSOCKET LOCAL
+  // Si hay conexión WiFi, atendemos el socket antes que nada
+  if (WiFi.status() == WL_CONNECTED) {
+    webSocket.loop();
+  } else {
+    // Si no hay WiFi, atendemos el portal AP (si estuviera activo)
+    server.handleClient();
+  }
+
+  // 2. ACTUALIZAR NUBE
+  // Esto mantiene la conexión con Arduino Cloud
+  ArduinoCloud.update(); 
+}
